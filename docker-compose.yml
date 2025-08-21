@@ -1,0 +1,42 @@
+services:
+  db_postgres_msdrg:
+    container_name: db_postgres_msdrg
+    image: postgres:16
+    environment:
+      POSTGRES_DB: db_msdrg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d db_msdrg"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+
+  app_msdrg:
+    container_name: app_msdrg
+    build: .
+    depends_on:
+      db_postgres_msdrg:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db_postgres_msdrg:5432/db_msdrg
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: gpt-4o-mini
+      ETL_CSV_URL: https://data.cms.gov/sites/default/files/2024-05/7d1f4bcd-7dd9-4fd1-aa7f-91cd69e452d3/MUP_INP_RY24_P03_V10_DY22_PrvSvc.CSV
+      ETL_CSV_PATH: /app/data/sample_prices_ny.csv
+      RATINGS_CSV_PATH: /app/data/ratings_seed.csv
+      ENABLE_LLM: "true"
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"
+    ports:
+      - "8000:8000"
+    command: sh -c "python migrate.py && python etl.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - ./:/app
+
+volumes:
+  dbdata:
